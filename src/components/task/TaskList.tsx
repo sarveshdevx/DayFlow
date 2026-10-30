@@ -7,6 +7,7 @@ import { InlineTaskComposer } from './InlineTaskComposer';
 interface TaskListProps {
   tasks: Task[];
   projectId?: string | null;
+  defaultDueDate?: string;
   emptyTitle?: string;
   emptySubtitle?: string;
 }
@@ -14,6 +15,7 @@ interface TaskListProps {
 export const TaskList: React.FC<TaskListProps> = ({
   tasks,
   projectId = null,
+  defaultDueDate,
   emptyTitle = 'All clear for now',
   emptySubtitle = 'Tap the button below or press Q to add a task.',
 }) => {
@@ -43,6 +45,7 @@ export const TaskList: React.FC<TaskListProps> = ({
         <div className="pt-2">
           <InlineTaskComposer
             initialProjectId={projectId}
+            initialDueDate={defaultDueDate}
             onClose={() => setIsAddingTask(false)}
           />
         </div>

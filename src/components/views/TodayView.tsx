@@ -43,6 +43,7 @@ export const TodayView: React.FC = () => {
       <div>
         <TaskList
           tasks={todayTasks}
+          defaultDueDate={todayStr}
           emptyTitle="Nothing scheduled for today"
           emptySubtitle="Take a break or schedule upcoming tasks."
         />

@@ -9,6 +9,7 @@ import { DatePickerPopover } from '../common/DatePickerPopover';
 
 interface InlineTaskComposerProps {
   initialProjectId?: string | null;
+  initialDueDate?: string;
   initialTask?: Task;
   onClose: () => void;
   onSuccess?: (task: Task) => void;
@@ -17,6 +18,7 @@ interface InlineTaskComposerProps {
 
 export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
   initialProjectId = null,
+  initialDueDate,
   initialTask,
   onClose,
   onSuccess,
@@ -25,7 +27,9 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
   const [title, setTitle] = useState(initialTask?.title || '');
   const [description, setDescription] = useState(initialTask?.description || '');
   const [priority, setPriority] = useState<Priority>(initialTask?.priority || 4);
-  const [dueDate, setDueDate] = useState<string | undefined>(initialTask?.dueDate);
+  const [dueDate, setDueDate] = useState<string | undefined>(
+    initialTask ? initialTask.dueDate : initialDueDate
+  );
   const [dueTime, setDueTime] = useState<string | undefined>(initialTask?.dueTime);
   const [recurrenceRule, setRecurrenceRule] = useState<string | undefined>(initialTask?.recurrenceRule);
   const [projectId, setProjectId] = useState<string | null>(initialTask ? (initialTask.projectId ?? null) : initialProjectId);
@@ -126,7 +130,7 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
       setTitle('');
       setDescription('');
       setPriority(4);
-      setDueDate(undefined);
+      setDueDate(initialDueDate);
       setDueTime(undefined);
       setRecurrenceRule(undefined);
       setLabels([]);
@@ -254,24 +258,47 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
           <div className="flex items-center gap-1.5">
             {/* Due Date Trigger */}
             <div className="relative">
-              <button
-                ref={dateButtonRef}
-                type="button"
-                onClick={() => {
-                  setShowDatePicker(!showDatePicker);
-                  setShowPriorityPicker(false);
-                  setShowProjectPicker(false);
-                  setShowLabelPicker(false);
-                }}
-                className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border transition-colors ${
-                  dueDate ? 'border-[#16a34a]/50 text-[#16a34a] bg-[#16a34a]/10' : 'border-[#404040] text-neutral-400 hover:text-neutral-200 hover:bg-[#303030]'
+              <div
+                className={`flex items-center text-xs rounded-md border transition-colors ${
+                  dueDate
+                    ? 'border-[#16a34a]/60 text-[#16a34a] bg-[#16a34a]/15 font-medium'
+                    : 'border-[#404040] text-neutral-400 hover:text-neutral-200 hover:bg-[#303030]'
                 }`}
-                title="Set Due Date"
               >
-                <Calendar className="w-3.5 h-3.5" />
-                <span>{dueDate ? formatDueDate(dueDate, dueTime).text : 'Date'}</span>
-                {recurrenceRule && <Repeat className="w-3 h-3 ml-0.5 text-[#16a34a]" />}
-              </button>
+                <button
+                  ref={dateButtonRef}
+                  type="button"
+                  onClick={() => {
+                    setShowDatePicker(!showDatePicker);
+                    setShowPriorityPicker(false);
+                    setShowProjectPicker(false);
+                    setShowLabelPicker(false);
+                  }}
+                  className={`flex items-center gap-1.5 py-1 ${dueDate ? 'pl-2.5 pr-1.5' : 'px-2.5'} hover:opacity-90`}
+                  title="Set Due Date"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>{dueDate ? formatDueDate(dueDate, dueTime).text : 'Date'}</span>
+                  {recurrenceRule && <Repeat className="w-3 h-3 ml-0.5 text-[#16a34a]" />}
+                </button>
+
+                {/* Quick remove date button */}
+                {dueDate && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDueDate(undefined);
+                      setDueTime(undefined);
+                      setRecurrenceRule(undefined);
+                    }}
+                    className="p-1 pr-2 hover:text-red-400 transition-colors cursor-pointer"
+                    title="Remove date"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
 
               {/* Date Picker Popover */}
               {showDatePicker && (
