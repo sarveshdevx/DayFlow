@@ -79,6 +79,12 @@ export function parseNaturalLanguageTaskInput(input: string): ParsedTaskInput {
   // Clean any leftover double spaces
   title = title.replace(/\s+/g, ' ').trim();
 
+  // Strictly enforce: no past dates allowed
+  const todayStr = getTodayString();
+  if (dueDate && dueDate < todayStr) {
+    dueDate = undefined;
+  }
+
   return {
     cleanTitle: title,
     priority,

@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import type { Priority, Task } from '../../types';
 import { parseNaturalLanguageTaskInput } from '../../utils/nlp';
-import { formatDueDate, formatRecurrenceLabel } from '../../utils/date';
+import { formatDueDate, formatRecurrenceLabel, getTodayString } from '../../utils/date';
 import { DatePickerPopover } from '../common/DatePickerPopover';
 
 interface InlineTaskComposerProps {
@@ -72,6 +72,12 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+
+    // Reject past due date
+    const todayStr = getTodayString();
+    if (dueDate && dueDate < todayStr) {
+      return;
+    }
 
     const now = new Date().toISOString();
 
@@ -180,10 +186,20 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
         {(dueDate || priority !== 4 || labels.length > 0) && (
           <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
             {dueDate && (
-              <span className="inline-flex items-center gap-1 text-[11px] bg-[#333333] text-neutral-200 px-2 py-0.5 rounded-md border border-[#444444]">
-                <Calendar className="w-3 h-3 text-[#16a34a]" />
-                <span>{formatDueDate(dueDate, dueTime).text}</span>
-                {recurrenceRule && (
+              <span
+                className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border ${
+                  dueDate < getTodayString()
+                    ? 'bg-red-950/40 text-red-400 border-red-700/60'
+                    : 'bg-[#333333] text-neutral-200 border-[#444444]'
+                }`}
+              >
+                <Calendar className={`w-3 h-3 ${dueDate < getTodayString() ? 'text-red-400' : 'text-[#16a34a]'}`} />
+                <span>
+                  {dueDate < getTodayString()
+                    ? `${dueDate} (Past date invalid)`
+                    : formatDueDate(dueDate, dueTime).text}
+                </span>
+                {recurrenceRule && dueDate >= getTodayString() && (
                   <span className="text-neutral-400 text-[10px] flex items-center gap-0.5">
                     <Repeat className="w-2.5 h-2.5" />
                     <span>{formatRecurrenceLabel(recurrenceRule)}</span>
@@ -463,8 +479,9 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
             {/* Add/Save Task Button */}
             <button
               type="submit"
-              disabled={!title.trim()}
+              disabled={!title.trim() || (!!dueDate && dueDate < getTodayString())}
               className="text-xs px-3.5 py-1.5 rounded-md font-semibold bg-[#dc4c3e] hover:bg-[#c53b27] disabled:opacity-50 disabled:hover:bg-[#dc4c3e] text-white transition-colors cursor-pointer shadow-sm"
+              title={!!dueDate && dueDate < getTodayString() ? 'Cannot schedule with past date' : undefined}
             >
               {initialTask ? 'Save' : 'Add task'}
             </button>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Sun,
   Armchair,
@@ -57,10 +57,29 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
   const [dateInputText, setDateInputText] = useState('');
   const [positionAbove, setPositionAbove] = useState(false);
 
-  // Active view month (defaults to selectedDate's month or current month)
-  const initialDate = selectedDate ? new Date(selectedDate) : new Date();
-  const [viewYear, setViewYear] = useState(initialDate.getFullYear());
-  const [viewMonth, setViewMonth] = useState(initialDate.getMonth()); // 0-indexed
+  // User local date calculation
+  const todayStr = getTodayString();
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  // Active view month:
+  // Reopening with a valid future date displays that date's month; otherwise defaults to current month
+  const [viewYear, setViewYear] = useState<number>(() => {
+    if (selectedDate && selectedDate >= todayStr) {
+      const parts = selectedDate.split('-').map(Number);
+      if (parts.length === 3 && !isNaN(parts[0])) return parts[0];
+    }
+    return currentYear;
+  });
+
+  const [viewMonth, setViewMonth] = useState<number>(() => {
+    if (selectedDate && selectedDate >= todayStr) {
+      const parts = selectedDate.split('-').map(Number);
+      if (parts.length === 3 && !isNaN(parts[1])) return parts[1] - 1;
+    }
+    return currentMonth;
+  });
 
   // Custom Time state
   const [customTime, setCustomTime] = useState(selectedTime || '09:00');
@@ -84,6 +103,13 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
     // Focus search input
     searchInputRef.current?.focus();
   }, [anchorRef]);
+
+  // Always reset calendar scroll to top so today's month starts clearly from the beginning
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [viewYear, viewMonth]);
 
   // Handle click outside and Escape
   useEffect(() => {
@@ -116,18 +142,23 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
   }, [onClose, currentView, anchorRef]);
 
   // Dynamic quick option dates
-  const todayStr = getTodayString();
   const tomorrowStr = getTomorrowString();
   const nextWeek = getNextWeekDate();
   const nextWeekend = getNextWeekendDate();
 
-  // Natural language date input submit
+  // Natural language date input submit - strictly prevents past dates
   const handleDateInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       const parsed = parseDateInputText(dateInputText);
       if (parsed) {
-        if (parsed.dueDate) onSelectDate(parsed.dueDate);
+        if (parsed.dueDate) {
+          if (parsed.dueDate < todayStr) {
+            // Strictly reject past date
+            return;
+          }
+          onSelectDate(parsed.dueDate);
+        }
         if (parsed.dueTime) onSelectTime(parsed.dueTime);
         if (parsed.recurrenceRule) onSelectRecurrence(parsed.recurrenceRule);
         onClose();
@@ -135,15 +166,18 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
     }
   };
 
-  // Month navigation
+  // Previous-month navigation must NOT allow navigating into months before the current month
+  const isPrevMonthDisabled =
+    viewYear < currentYear || (viewYear === currentYear && viewMonth <= currentMonth);
+
   const handlePrevMonth = () => {
+    if (isPrevMonthDisabled) return;
     if (viewMonth === 0) {
       setViewYear(viewYear - 1);
       setViewMonth(11);
     } else {
       setViewMonth(viewMonth - 1);
     }
-    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleNextMonth = () => {
@@ -153,22 +187,40 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
     } else {
       setViewMonth(viewMonth + 1);
     }
-    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleJumpToToday = () => {
-    const now = new Date();
-    setViewYear(now.getFullYear());
-    setViewMonth(now.getMonth());
-    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    setViewYear(currentYear);
+    setViewMonth(currentMonth);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
   };
 
   const handleSelectDay = (dateStr: string) => {
+    // Strictly prevent selecting past dates
+    if (dateStr < todayStr) return;
     onSelectDate(dateStr);
     onClose();
   };
 
-  // Render months for continuous vertical scrolling (renders current viewing month and next 2 months)
+  // Generate 24 future months starting from viewing month for smooth vertical scrolling
+  const monthsToRender = useMemo(() => {
+    const list: { year: number; month: number }[] = [];
+    let y = viewYear;
+    let m = viewMonth;
+    for (let i = 0; i < 24; i++) {
+      list.push({ year: y, month: m });
+      m++;
+      if (m > 11) {
+        m = 0;
+        y++;
+      }
+    }
+    return list;
+  }, [viewYear, viewMonth]);
+
+  // Render month day grid (Monday to Sunday)
   const renderMonthGrid = (year: number, month: number, isFirst: boolean) => {
     const firstDayOfMonth = new Date(year, month, 1);
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -188,12 +240,12 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
 
     return (
       <div key={`${year}-${month}`} className="mb-3">
-        {/* Sub-header for subsequent months or first month */}
-        {!isFirst ? (
-          <div className="text-[11px] font-semibold text-neutral-300 px-1 py-1.5 mt-2 border-t border-[#333333]/60">
-            {monthName} {year !== new Date().getFullYear() && fullYear}
+        {/* Month sub-header for subsequent months in the scroll view */}
+        {!isFirst && (
+          <div className="text-[11px] font-semibold text-neutral-300 px-1 py-1 mt-2 border-t border-[#333333]/60">
+            {monthName} {fullYear}
           </div>
-        ) : null}
+        )}
 
         <div className="grid grid-cols-7 gap-y-1 gap-x-0.5 text-center">
           {days.map((day, idx) => {
@@ -204,14 +256,32 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
             const dayDate = new Date(year, month, day);
             const dateStr = formatDateToYYYYMMDD(dayDate);
             const isToday = dateStr === todayStr;
+            const isPast = dateStr < todayStr;
             const isSelected = dateStr === selectedDate;
+
+            // Past dates must be muted, visually disabled, and non-clickable
+            if (isPast) {
+              return (
+                <button
+                  key={dateStr}
+                  type="button"
+                  disabled={true}
+                  aria-disabled="true"
+                  tabIndex={-1}
+                  className="w-8 h-7 text-xs rounded-full flex items-center justify-center mx-auto text-neutral-600 opacity-25 cursor-not-allowed select-none pointer-events-none"
+                  title="Past dates cannot be selected"
+                >
+                  {day}
+                </button>
+              );
+            }
 
             return (
               <button
                 key={dateStr}
                 type="button"
                 onClick={() => handleSelectDay(dateStr)}
-                className={`w-8 h-7 text-xs rounded-full flex items-center justify-center transition-colors mx-auto ${
+                className={`w-8 h-7 text-xs rounded-full flex items-center justify-center transition-colors mx-auto cursor-pointer ${
                   isSelected
                     ? 'bg-[#dc4c3e] text-white font-semibold'
                     : isToday
@@ -228,19 +298,6 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
       </div>
     );
   };
-
-  // Compute 3 consecutive months to allow vertical scroll
-  const monthsToRender = [
-    { year: viewYear, month: viewMonth },
-    {
-      year: viewMonth === 11 ? viewYear + 1 : viewYear,
-      month: (viewMonth + 1) % 12,
-    },
-    {
-      year: viewMonth >= 10 ? viewYear + 1 : viewYear,
-      month: (viewMonth + 2) % 12,
-    },
-  ];
 
   return (
     <div
@@ -345,9 +402,14 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
               <div className="flex items-center gap-1">
                 <button
                   type="button"
+                  disabled={isPrevMonthDisabled}
                   onClick={handlePrevMonth}
-                  className="p-1 rounded hover:bg-[#333333] text-neutral-400 hover:text-white transition-colors"
-                  title="Previous month"
+                  className={`p-1 rounded transition-colors ${
+                    isPrevMonthDisabled
+                      ? 'text-neutral-600 opacity-25 cursor-not-allowed'
+                      : 'text-neutral-400 hover:text-white hover:bg-[#333333]'
+                  }`}
+                  title={isPrevMonthDisabled ? 'Cannot navigate to past months' : 'Previous month'}
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
@@ -384,7 +446,9 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
             {/* Vertically Scrollable Multiple Months */}
             <div
               ref={scrollContainerRef}
-              className="max-h-[175px] overflow-y-auto pr-0.5"
+              onWheel={(e) => e.stopPropagation()}
+              className="max-h-[200px] overflow-y-auto overscroll-contain pr-0.5 select-none"
+              style={{ scrollbarWidth: 'thin' }}
             >
               {monthsToRender.map((m, idx) =>
                 renderMonthGrid(m.year, m.month, idx === 0)
@@ -722,3 +786,4 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
     </div>
   );
 };
+

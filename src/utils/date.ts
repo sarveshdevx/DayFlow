@@ -209,11 +209,10 @@ export function parseDateInputText(query: string): { dueDate?: string; dueTime?:
       dueDate = formatDateToYYYYMMDD(d);
     } else {
       // Try parsing standard date like "Nov 15", "15 Nov", "November 15, 2026", "2026-11-15"
-      // Attempt parse with Date.parse
-      const year = new Date().getFullYear();
+      const currentYear = new Date().getFullYear();
       let attemptStr = cleaned;
       if (!/\d{4}/.test(attemptStr)) {
-        attemptStr += ` ${year}`;
+        attemptStr += ` ${currentYear}`;
       }
       const parsedTime = Date.parse(attemptStr);
       if (!isNaN(parsedTime)) {
@@ -221,6 +220,12 @@ export function parseDateInputText(query: string): { dueDate?: string; dueTime?:
         dueDate = formatDateToYYYYMMDD(d);
       }
     }
+  }
+
+  // Strictly enforce: no past dates allowed
+  const todayStr = getTodayString();
+  if (dueDate && dueDate < todayStr) {
+    dueDate = undefined;
   }
 
   if (!dueDate && !dueTime && !recurrenceRule) return null;
