@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsx tests/verify-phase1-phase2.ts"
+    "test": "tsx tests/verify-phase1-phase2.ts",
+    "test:datepicker": "tsx tests/verify-date-picker.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

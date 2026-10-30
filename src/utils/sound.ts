@@ -37,3 +37,4 @@ export function playTaskCompleteSound() {
     // Graceful fallback if audio is not permitted by browser
   }
 }
+

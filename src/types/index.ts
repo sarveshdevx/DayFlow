@@ -7,6 +7,7 @@ export interface Task {
   priority: Priority;
   dueDate?: string; // YYYY-MM-DD
   dueTime?: string; // HH:mm
+  recurrenceRule?: string; // e.g. 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | custom string
   projectId?: string | null; // null or undefined means Inbox
   sectionId?: string | null;
   parentId?: string | null; // For nested subtasks
@@ -54,3 +55,4 @@ export interface UserPreferences {
 }
 
 export type ViewType = 'inbox' | 'today' | 'upcoming' | 'filters-labels' | 'productivity' | 'project';
+

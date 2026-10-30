@@ -37,3 +37,4 @@ export const QuickAddModal: React.FC = () => {
     </div>
   );
 };
+

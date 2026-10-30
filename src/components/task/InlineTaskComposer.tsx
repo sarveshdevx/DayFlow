@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, Flag, Hash, Tag, X } from 'lucide-react';
+import { Calendar, Flag, Hash, Tag, X, Repeat } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import type { Priority, Task } from '../../types';
 import { parseNaturalLanguageTaskInput } from '../../utils/nlp';
-import { getTodayString, getTomorrowString } from '../../utils/date';
+import { formatDueDate, formatRecurrenceLabel } from '../../utils/date';
+import { DatePickerPopover } from '../common/DatePickerPopover';
 
 interface InlineTaskComposerProps {
   initialProjectId?: string | null;
@@ -26,6 +27,7 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
   const [priority, setPriority] = useState<Priority>(initialTask?.priority || 4);
   const [dueDate, setDueDate] = useState<string | undefined>(initialTask?.dueDate);
   const [dueTime, setDueTime] = useState<string | undefined>(initialTask?.dueTime);
+  const [recurrenceRule, setRecurrenceRule] = useState<string | undefined>(initialTask?.recurrenceRule);
   const [projectId, setProjectId] = useState<string | null>(initialTask ? (initialTask.projectId ?? null) : initialProjectId);
   const [labels, setLabels] = useState<string[]>(initialTask?.labels || []);
   const [labelInput, setLabelInput] = useState('');
@@ -35,6 +37,7 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
   const [showLabelPicker, setShowLabelPicker] = useState(false);
 
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const dateButtonRef = useRef<HTMLButtonElement>(null);
 
   const projects = useLiveQuery(() => db.projects.toArray()) || [];
   const availableLabels = useLiveQuery(() => db.labels.toArray()) || [];
@@ -85,6 +88,7 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
         priority,
         dueDate,
         dueTime,
+        recurrenceRule,
         projectId,
         labels,
         updatedAt: now,
@@ -102,6 +106,7 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
         priority,
         dueDate,
         dueTime,
+        recurrenceRule,
         projectId,
         isCompleted: false,
         orderIndex: count,
@@ -117,6 +122,7 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
       setPriority(4);
       setDueDate(undefined);
       setDueTime(undefined);
+      setRecurrenceRule(undefined);
       setLabels([]);
       titleInputRef.current?.focus();
     }
@@ -176,12 +182,19 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
             {dueDate && (
               <span className="inline-flex items-center gap-1 text-[11px] bg-[#333333] text-neutral-200 px-2 py-0.5 rounded-md border border-[#444444]">
                 <Calendar className="w-3 h-3 text-[#16a34a]" />
-                {dueDate} {dueTime && `@ ${dueTime}`}
+                <span>{formatDueDate(dueDate, dueTime).text}</span>
+                {recurrenceRule && (
+                  <span className="text-neutral-400 text-[10px] flex items-center gap-0.5">
+                    <Repeat className="w-2.5 h-2.5" />
+                    <span>{formatRecurrenceLabel(recurrenceRule)}</span>
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => {
                     setDueDate(undefined);
                     setDueTime(undefined);
+                    setRecurrenceRule(undefined);
                   }}
                   className="hover:text-red-400 ml-1"
                 >
@@ -226,6 +239,7 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
             {/* Due Date Trigger */}
             <div className="relative">
               <button
+                ref={dateButtonRef}
                 type="button"
                 onClick={() => {
                   setShowDatePicker(!showDatePicker);
@@ -239,61 +253,22 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
                 title="Set Due Date"
               >
                 <Calendar className="w-3.5 h-3.5" />
-                <span>{dueDate ? dueDate : 'Due date'}</span>
+                <span>{dueDate ? formatDueDate(dueDate, dueTime).text : 'Date'}</span>
+                {recurrenceRule && <Repeat className="w-3 h-3 ml-0.5 text-[#16a34a]" />}
               </button>
 
-              {/* Date Picker Dropdown */}
+              {/* Date Picker Popover */}
               {showDatePicker && (
-                <div className="absolute left-0 bottom-full mb-1 w-48 bg-[#2d2d2d] border border-[#404040] rounded-lg shadow-2xl p-1.5 z-50 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDueDate(getTodayString());
-                      setShowDatePicker(false);
-                    }}
-                    className="w-full text-left px-2 py-1.5 rounded hover:bg-[#383838] flex items-center justify-between text-neutral-200"
-                  >
-                    <span>Today</span>
-                    <span className="text-[10px] text-neutral-500">Today</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDueDate(getTomorrowString());
-                      setShowDatePicker(false);
-                    }}
-                    className="w-full text-left px-2 py-1.5 rounded hover:bg-[#383838] flex items-center justify-between text-neutral-200"
-                  >
-                    <span>Tomorrow</span>
-                    <span className="text-[10px] text-neutral-500">Tmrw</span>
-                  </button>
-                  <div className="border-t border-[#3a3a3a] my-1" />
-                  <div className="px-2 py-1">
-                    <label className="text-[10px] text-neutral-400 block mb-1">Pick date:</label>
-                    <input
-                      type="date"
-                      value={dueDate || ''}
-                      onChange={(e) => {
-                        setDueDate(e.target.value);
-                        setShowDatePicker(false);
-                      }}
-                      className="w-full bg-[#1e1e1e] border border-[#444444] rounded px-1.5 py-1 text-neutral-200 text-xs outline-none"
-                    />
-                  </div>
-                  {dueDate && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDueDate(undefined);
-                        setDueTime(undefined);
-                        setShowDatePicker(false);
-                      }}
-                      className="w-full text-left px-2 py-1 text-red-400 hover:bg-[#383838] rounded text-[11px] mt-1"
-                    >
-                      Clear date
-                    </button>
-                  )}
-                </div>
+                <DatePickerPopover
+                  selectedDate={dueDate}
+                  selectedTime={dueTime}
+                  selectedRecurrence={recurrenceRule}
+                  onSelectDate={(d) => setDueDate(d)}
+                  onSelectTime={(t) => setDueTime(t)}
+                  onSelectRecurrence={(r) => setRecurrenceRule(r)}
+                  onClose={() => setShowDatePicker(false)}
+                  anchorRef={dateButtonRef}
+                />
               )}
             </div>
 
@@ -499,3 +474,4 @@ export const InlineTaskComposer: React.FC<InlineTaskComposerProps> = ({
     </div>
   );
 };
+

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Calendar, MoreHorizontal, Pencil, Trash2, Tag } from 'lucide-react';
+import { Calendar, MoreHorizontal, Pencil, Trash2, Tag, Repeat } from 'lucide-react';
 import { db } from '../../db';
 import type { Task } from '../../types';
 import { CustomCheckbox } from '../common/CustomCheckbox';
 import { PriorityBadge } from '../common/PriorityBadge';
-import { formatDueDate } from '../../utils/date';
+import { formatDueDate, formatRecurrenceLabel } from '../../utils/date';
 import { playTaskCompleteSound } from '../../utils/sound';
 import { useUIStore } from '../../store/useUIStore';
 import { InlineTaskComposer } from './InlineTaskComposer';
@@ -91,9 +91,15 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task }) => {
                     ? 'text-[#16a34a]'
                     : 'text-neutral-400'
                 }`}
+                title={task.recurrenceRule ? formatRecurrenceLabel(task.recurrenceRule) : undefined}
               >
                 <Calendar className="w-3 h-3" />
-                {dueDateText}
+                <span>{dueDateText}</span>
+                {task.recurrenceRule && (
+                  <span className="inline-flex items-center gap-0.5 ml-0.5 opacity-80" title={formatRecurrenceLabel(task.recurrenceRule)}>
+                    <Repeat className="w-2.5 h-2.5" />
+                  </span>
+                )}
               </span>
             )}
 
@@ -167,3 +173,4 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task }) => {
     </div>
   );
 };
+

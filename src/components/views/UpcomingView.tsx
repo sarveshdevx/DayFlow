@@ -63,3 +63,4 @@ export const UpcomingView: React.FC = () => {
     </div>
   );
 };
+

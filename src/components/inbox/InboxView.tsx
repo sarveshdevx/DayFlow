@@ -138,3 +138,4 @@ export const InboxView: React.FC = () => {
     </div>
   );
 };
+

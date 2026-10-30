@@ -125,3 +125,4 @@ export async function seedInitialDataIfNeeded() {
   ];
   await db.tasks.bulkAdd(starterTasks);
 }
+

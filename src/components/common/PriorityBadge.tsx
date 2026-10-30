@@ -25,3 +25,4 @@ export const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, size = '
     </span>
   );
 };
+
