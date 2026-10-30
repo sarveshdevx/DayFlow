@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Sun,
   Armchair,
@@ -55,7 +56,6 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
 
   const [currentView, setCurrentView] = useState<PickerView>('calendar');
   const [dateInputText, setDateInputText] = useState('');
-  const [positionAbove, setPositionAbove] = useState(false);
 
   // User local date calculation
   const todayStr = getTodayString();
@@ -63,8 +63,7 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
 
-  // Active view month:
-  // Reopening with a valid future date displays that date's month; otherwise defaults to current month
+  // Active view month (defaults to selectedDate's month if future/today, or current month)
   const [viewYear, setViewYear] = useState<number>(() => {
     if (selectedDate && selectedDate >= todayStr) {
       const parts = selectedDate.split('-').map(Number);
@@ -89,20 +88,86 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
   const [customUnit, setCustomUnit] = useState<'day' | 'week' | 'month' | 'year'>('week');
   const [customDays, setCustomDays] = useState<number[]>([1]); // 0=Sun, 1=Mon...
 
-  // Viewport adjustment
-  useEffect(() => {
-    if (anchorRef?.current) {
-      const rect = anchorRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      if (spaceBelow < 440 && rect.top > 440) {
-        setPositionAbove(true);
-      } else {
-        setPositionAbove(false);
-      }
+  // Dynamic coordinates and max-height clamped to viewport with 12px margin
+  const [coords, setCoords] = useState<{ top: number; left: number; maxHeight: number }>({
+    top: 12,
+    left: 12,
+    maxHeight: 460,
+  });
+
+  const updatePosition = useCallback(() => {
+    const margin = 12;
+    const popoverWidth = 270;
+    const preferredHeight = 440;
+    const minHeight = 220;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    if (!anchorRef?.current) {
+      setCoords({
+        top: Math.max(margin, Math.round((viewportHeight - preferredHeight) / 2)),
+        left: Math.max(margin, Math.round((viewportWidth - popoverWidth) / 2)),
+        maxHeight: Math.max(minHeight, viewportHeight - margin * 2),
+      });
+      return;
     }
-    // Focus search input
-    searchInputRef.current?.focus();
+
+    const rect = anchorRef.current.getBoundingClientRect();
+    const spaceBelow = viewportHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+
+    let top = 0;
+    let maxHeight = 0;
+
+    // If there is enough room below (>= 280px) or more room below than above:
+    if (spaceBelow >= 300 || spaceBelow >= spaceAbove) {
+      // Open below trigger
+      top = rect.bottom + 6;
+      maxHeight = Math.min(preferredHeight, viewportHeight - top - margin);
+      // Ensure top doesn't push it beyond bottom margin
+      if (top + minHeight > viewportHeight - margin) {
+        top = Math.max(margin, viewportHeight - margin - minHeight);
+        maxHeight = viewportHeight - top - margin;
+      }
+    } else {
+      // Open above trigger
+      const availableAbove = spaceAbove - 6;
+      maxHeight = Math.min(preferredHeight, Math.max(minHeight, availableAbove));
+      top = Math.max(margin, rect.top - 6 - maxHeight);
+    }
+
+    // Horizontal placement: align with trigger left, clamped within viewport [12px, viewportWidth - 12px]
+    let left = rect.left;
+    if (left + popoverWidth > viewportWidth - margin) {
+      left = viewportWidth - popoverWidth - margin;
+    }
+    if (left < margin) {
+      left = margin;
+    }
+
+    setCoords({
+      top: Math.round(top),
+      left: Math.round(left),
+      maxHeight: Math.round(Math.max(minHeight, Math.min(maxHeight, viewportHeight - margin * 2))),
+    });
   }, [anchorRef]);
+
+  // Recalculate position on mount, window resize, and scroll (capturing all container scrolls)
+  useEffect(() => {
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [updatePosition]);
+
+  // Focus input on open
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
 
   // Always reset calendar scroll to top so today's month starts clearly from the beginning
   useEffect(() => {
@@ -299,19 +364,22 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
     );
   };
 
-  return (
+  const popoverContent = (
     <div
       ref={popoverRef}
-      className={`absolute z-50 w-[270px] bg-[#222222] border border-[#383838] rounded-xl shadow-2xl text-neutral-200 select-none overflow-hidden animate-fade-in ${
-        positionAbove ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
-      } left-0 ${className}`}
+      className={`fixed z-[9999] w-[270px] bg-[#222222] border border-[#383838] rounded-xl shadow-2xl text-neutral-200 select-none overflow-hidden flex flex-col animate-fade-in ${className}`}
+      style={{
+        top: `${coords.top}px`,
+        left: `${coords.left}px`,
+        maxHeight: `${coords.maxHeight}px`,
+      }}
       onClick={(e) => e.stopPropagation()}
     >
       {/* 1. Main Calendar View */}
       {currentView === 'calendar' && (
-        <div className="flex flex-col">
-          {/* A. Search / Type a date input */}
-          <div className="p-2 border-b border-[#333333]">
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          {/* A. Search / Type a date input (Fixed Top) */}
+          <div className="p-2 border-b border-[#333333] flex-shrink-0">
             <input
               ref={searchInputRef}
               type="text"
@@ -323,8 +391,8 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
             />
           </div>
 
-          {/* B. Quick Date Options */}
-          <div className="p-1 space-y-0.5 border-b border-[#333333]">
+          {/* B. Quick Date Options (Fixed Top) */}
+          <div className="p-1 space-y-0.5 border-b border-[#333333] flex-shrink-0">
             {/* Today */}
             <button
               type="button"
@@ -388,10 +456,10 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
             </button>
           </div>
 
-          {/* C. Full Calendar Header & Grid */}
-          <div className="p-2">
-            {/* Header: Month Year + Navigation */}
-            <div className="flex items-center justify-between px-1 mb-1.5">
+          {/* C. Full Calendar Header & Grid (Scrollable Middle Section) */}
+          <div className="p-2 flex-1 min-h-0 flex flex-col overflow-hidden">
+            {/* Header: Month Year + Navigation (Fixed inside middle section) */}
+            <div className="flex items-center justify-between px-1 mb-1.5 flex-shrink-0">
               <span className="text-xs font-semibold text-neutral-200">
                 {new Date(viewYear, viewMonth, 1).toLocaleDateString('en-US', {
                   month: 'short',
@@ -432,8 +500,8 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
               </div>
             </div>
 
-            {/* Weekday Labels (Monday to Sunday) */}
-            <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold text-neutral-500 py-1 border-b border-[#333333]/40 mb-1">
+            {/* Weekday Labels (Monday to Sunday) (Fixed inside middle section) */}
+            <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold text-neutral-500 py-1 border-b border-[#333333]/40 mb-1 flex-shrink-0">
               <span>M</span>
               <span>T</span>
               <span>W</span>
@@ -447,7 +515,7 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
             <div
               ref={scrollContainerRef}
               onWheel={(e) => e.stopPropagation()}
-              className="max-h-[200px] overflow-y-auto overscroll-contain pr-0.5 select-none"
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-0.5 select-none"
               style={{ scrollbarWidth: 'thin' }}
             >
               {monthsToRender.map((m, idx) =>
@@ -456,8 +524,8 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
             </div>
           </div>
 
-          {/* D & E. Time & Repeat Buttons */}
-          <div className="p-1.5 border-t border-[#333333] space-y-1">
+          {/* D & E. Time & Repeat Buttons (Fixed Bottom Section) */}
+          <div className="p-1.5 border-t border-[#333333] space-y-1 flex-shrink-0">
             {/* Time Trigger */}
             <div className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[#2e2e2e] text-xs font-medium text-neutral-300 transition-colors cursor-pointer group">
               <button
@@ -533,7 +601,7 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
 
       {/* 2. Time Selection View */}
       {currentView === 'time' && (
-        <div className="p-3">
+        <div className="p-3 flex-1 min-h-0 overflow-y-auto">
           <div className="flex items-center gap-2 pb-2.5 mb-2.5 border-b border-[#333333]">
             <button
               type="button"
@@ -785,5 +853,8 @@ export const DatePickerPopover: React.FC<DatePickerPopoverProps> = ({
       )}
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(popoverContent, document.body);
 };
 
