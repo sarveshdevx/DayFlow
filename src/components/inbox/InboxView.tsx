@@ -1,20 +1,25 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, SlidersHorizontal } from 'lucide-react';
+import { Eye, EyeOff, SlidersHorizontal, Plus } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { TaskList } from '../task/TaskList';
+import { InlineTaskComposer } from '../task/InlineTaskComposer';
 import { useUIStore } from '../../store/useUIStore';
 
 export const InboxView: React.FC = () => {
   const [showCompleted, setShowCompleted] = useState(false);
   const [sortBy, setSortBy] = useState<'default' | 'priority' | 'date'>('default');
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [isAddingTask, setIsAddingTask] = useState(false);
   const { searchQuery } = useUIStore();
 
   // Query Inbox tasks (where projectId is null)
   const rawTasks = useLiveQuery(() => db.tasks.toArray()) || [];
 
   let inboxTasks = rawTasks.filter((t) => !t.projectId);
+
+  // Active inbox tasks count (regardless of search or showCompleted)
+  const activeInboxTasksCount = rawTasks.filter((t) => !t.projectId && !t.isCompleted).length;
 
   // Search filtering
   if (searchQuery.trim()) {
@@ -44,6 +49,9 @@ export const InboxView: React.FC = () => {
   } else {
     inboxTasks.sort((a, b) => a.orderIndex - b.orderIndex);
   }
+
+  // Check if inbox has zero active tasks (or no tasks match and active count is 0)
+  const isEmptyInbox = activeInboxTasksCount === 0 && (!showCompleted || inboxTasks.length === 0);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -128,13 +136,49 @@ export const InboxView: React.FC = () => {
         </div>
       </div>
 
-      {/* Task List */}
-      <TaskList
-        tasks={inboxTasks}
-        projectId={null}
-        emptyTitle="Inbox Zero achieved! 🎉"
-        emptySubtitle="Capture new ideas, notes, or tasks anytime by pressing Q."
-      />
+      {/* Task List or Custom Empty State */}
+      {isEmptyInbox ? (
+        isAddingTask ? (
+          <div className="pt-2">
+            <InlineTaskComposer
+              initialProjectId={null}
+              onClose={() => setIsAddingTask(false)}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center select-none">
+            <img
+              src="/empty-inbox.png"
+              alt="Inbox is empty"
+              className="w-64 sm:w-72 max-w-[280px] sm:max-w-[300px] h-auto mx-auto mb-6 object-contain pointer-events-none drop-shadow-md"
+            />
+            <h2 className="text-lg font-bold text-white mb-2">Inbox is empty</h2>
+            <p className="text-xs sm:text-sm text-neutral-400 max-w-sm mx-auto mb-6 leading-relaxed">
+              Capture new ideas, notes, or tasks anytime. Add a task to get started.
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsAddingTask(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-[#dc4c3e] hover:bg-[#c53b27] text-white text-xs sm:text-sm font-semibold rounded-lg shadow-md transition-all duration-150 cursor-pointer active:scale-95"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Add task</span>
+            </button>
+          </div>
+        )
+      ) : inboxTasks.length === 0 && searchQuery.trim() ? (
+        <div className="py-12 text-center text-neutral-400">
+          <p className="text-sm font-medium text-neutral-300">No tasks found</p>
+          <p className="text-xs text-neutral-500 mt-1">
+            No tasks in Inbox match &quot;{searchQuery}&quot;
+          </p>
+        </div>
+      ) : (
+        <TaskList
+          tasks={inboxTasks}
+          projectId={null}
+        />
+      )}
     </div>
   );
 };
