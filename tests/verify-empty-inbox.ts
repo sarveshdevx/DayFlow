@@ -78,3 +78,4 @@ assert.strictEqual(state, 'empty_illustration', 'completing active tasks should 
 
 console.log('✓ Dynamic state transitions verified: empty state -> composer -> task list -> restored empty state.');
 console.log('--- ALL EMPTY INBOX VERIFICATIONS PASSED! ---');
+
